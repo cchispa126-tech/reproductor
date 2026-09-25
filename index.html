@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>IPTV Cleaner Pro - Con HLS.js, PiP y reproducción mejorada</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            font-size: 1.8rem;
+        }
+        .sub { color: #888; margin-bottom: 20px; font-size: 0.9rem; }
+        
+        /* Paneles */
+        .panel {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 15px 0;
+        }
+        .area-arrastre {
+            border: 3px dashed #667eea;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .area-arrastre:hover { background: #2a2a2a; border-color: #764ba2; }
+        input[type="file"] { display: none; }
+        
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
+            transition: all 0.2s;
+        }
+        button:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .verde { background: #10b981; }
+        .rojo { background: #ef4444; }
+        .amarillo { background: #f59e0b; }
+        .pip-btn { background: #8b5cf6; }
+        .modo-normal { background: #3b82f6; }
+        
+        /* Filtros */
+        .filtros {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 15px 0;
+            padding: 15px;
+            background: #2a2a2a;
+            border-radius: 10px;
+        }
+        .filtro-btn {
+            background: #333;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filtro-btn:hover { background: #444; }
+        .filtro-btn.activo { background: #667eea; }
+        
+        /* Stats */
+        .stats {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+        .stat {
+            background: #2a2a2a;
+            padding: 10px 18px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat .numero { font-size: 24px; font-weight: bold; color: #667eea; }
+        .stat .label { font-size: 11px; color: #888; }
+        
+        /* Progreso */
+        .progress-container {
+            background: #333;
+            border-radius: 10px;
+            height: 25px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            height: 100%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+        }
+        
+        /* Log */
+        .log {
+            background: #0a0a0a;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 10px;
+            height: 120px;
+            overflow-y: auto;
+            margin: 15px 0;
+        }
+        
+        /* Grid de canales */
+        .pais-seccion { margin: 25px 0 15px 0; }
+        .pais-titulo {
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        .pais-titulo h3 { font-size: 1.1rem; }
+        .pais-titulo .count { background: #667eea; padding: 3px 10px; border-radius: 20px; font-size: 11px; }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .canal {
+            background: #1e1e1e;
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .canal:hover { transform: translateX(5px); border-color: #10b981; background: #252525; }
+        .canal.playing { border-color: #667eea; background: #2a2a4a; }
+        .canal-icono { font-size: 20px; }
+        .canal-info { flex: 1; }
+        .canal-nombre { font-weight: bold; font-size: 0.85rem; word-break: break-word; }
+        .canal-grupo { font-size: 10px; color: #888; margin-top: 3px; }
+        
+        /* Reproductor flotante - MODIFICADO para que se pueda arrastrar */
+        .reproductor {
+            position: fixed;
+            left: 50px;
+            top: 50px;
+            width: 420px;
+            max-width: calc(100% - 40px);
+            background: #000;
+            border-radius: 12px;
+            display: none;
+            z-index: 1000;
+            border: 2px solid #667eea;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            cursor: default;
+        }
+        .reproductor-header {
+            background: #1e1e1e;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            cursor: grab;
+            user-select: none;
+            border-radius: 10px 10px 0 0;
+        }
+        .reproductor-header:active {
+            cursor: grabbing;
+        }
+        .reproductor-header span { font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+        .cerrar {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0 8px;
+        }
+        .cerrar:hover { color: #ef4444; }
+        video { width: 100%; max-height: 240px; background: #000; }
+        
+        .nav-controls {
+            display: flex;
+            gap: 10px;
+            padding: 8px;
+            justify-content: center;
+            background: #1e1e1e;
+            border-radius: 0 0 10px 10px;
+        }
+        .nav-controls button {
+            padding: 5px 15px;
+            font-size: 12px;
+            margin: 0;
+        }
+        
+        .badge-memoria {
+            background: #10b981;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+        .badge-modo {
+            background: #3b82f6;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+        
+        /* Indicador PiP activo */
+        .pip-active {
+            background: #8b5cf6;
+            box-shadow: 0 0 10px #8b5cf6;
+        }
+        
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            .reproductor { 
+                bottom: 0; 
+                right: 0; 
+                left: auto !important;
+                top: auto !important;
+                width: 100%; 
+                border-radius: 12px 12px 0 0;
+            }
+            .reproductor-header { cursor: default; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📺 IPTV Cleaner Pro <span id="memoriaBadge" class="badge-memoria" style="display:none;">💾 Memorizado</span><span id="modoBadge" class="badge-modo" style="display:none;">🎬 Modo Normal</span></h1>
+    <div class="sub">✅ Limpieza automática | 🌍 Ordenado por país/idioma | 💾 Memoriza canales activos | 🎬 HLS.js + Picture-in-Picture</div>
+    
+    <div class="panel">
+        <div class="area-arrastre" id="areaArrastre">
+            📂 Haz clic o arrastra tu archivo M3U aquí
+            <input type="file" id="fileInput" accept=".m3u,.m3u8,.txt">
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
+            <button id="iniciarBtn" disabled>🚀 Iniciar limpieza automática</button>
+            <button id="modoNormalBtn" disabled class="modo-normal">🎬 Cargar como reproductor normal (sin limpieza)</button>
+            <button id="exportarBtn" disabled class="verde">💾 Exportar canales actuales</button>
+            <button id="borrarMemoriaBtn" class="amarillo">🗑️ Borrar memorizados</button>
+        </div>
+    </div>
+    
+    <div id="resultadosPanel" style="display:none;">
+        <div class="stats">
+            <div class="stat"><div class="numero" id="total">0</div><div class="label">Total</div></div>
+            <div class="stat"><div class="numero" id="activos" style="color:#10b981;">0</div><div class="label">✅ Mostrados</div></div>
+            <div class="stat"><div class="numero" id="paises">0</div><div class="label">🌍 Países</div></div>
+        </div>
+        <div class="progress-container" id="progressContainer" style="display:none;"><div class="progress-fill" id="progressFill">0%</div></div>
+        <div class="log" id="log"></div>
+        
+        <div class="filtros" id="filtrosContainer"></div>
+        <div id="canalesPorPais"></div>
+    </div>
+</div>
+
+<div class="reproductor" id="reproductor">
+    <div class="reproductor-header" id="reproductorHeader">
+        <span id="tituloCanal">Canal</span>
+        <button id="pipBtn" class="pip-btn" style="padding: 5px 12px;">📺 PiP</button>
+        <button class="cerrar" id="cerrarReproductorBtn">✕</button>
+    </div>
+    <video id="video" controls></video>
+    <div class="nav-controls">
+        <button id="anteriorBtn" style="background:#333;">◀ Anterior</button>
+        <button id="siguienteBtn" style="background:#333;">Siguiente ▶</button>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>
+    // ============ VARIABLES ============
+    let todosCanales = [];
+    let canalesActualesMostrados = [];
+    let analizando = false;
+    let detener = false;
+    let paisActual = 'todos';
+    let hls = null;
+    let indiceActual = -1;
+    let modoActual = 'limpio'; // 'limpio' o 'normal'
+    
+    // Mapeo de palabras clave por país/idioma
+    const patronesPais = {
+        '🇪🇸 España': ['españa', 'spanish', 'espanol', 'español', 'la1', 'la2', 'antena', 'telecinco', 'cuatro', 'sexta', 'movistar', 'vodafone', 'orange', 'tdp', 'canal sur', 'telemadrid', 'catalunya', 'tv3', '324', 'betevé', 'etb', 'euskal', 'tv gallega', 'tvga', 'andalucia', 'aragon', 'canarias'],
+        '🇲🇽 México': ['mexico', 'mexicano', 'televisa', 'tv azteca', 'las estrellas', 'canal 5', 'azteca', 'multimedios', 'mexiquense'],
+        '🇦🇷 Argentina': ['argentina', 'argentino', 'tn', 'telefe', 'el trece', 'america', 'tyc', 'c5n', 'la nacion', 'tv publica', 'canal 26', 'cronica'],
+        '🇨🇴 Colombia': ['colombia', 'colombiano', 'caracol', 'rcn', 'citytv', 'win sports', 'canal 1', 'señal colombia', 'teleantioquia'],
+        '🇨🇱 Chile': ['chile', 'chileno', 'mega', 'tvn', 'chilevision', 'canal 13', 'la red', 'telecanal'],
+        '🇵🇪 Perú': ['peru', 'peruano', 'america tv', 'panamericana', 'latina', 'canal n', 'tv peru', 'willax'],
+        '🇻🇪 Venezuela': ['venezuela', 'venezolano', 'venevision', 'televen', 'globovision', 'vive tv', 'meridiano'],
+        '🇺🇸 USA/Inglés': ['usa', 'united states', 'american', 'abc', 'nbc', 'cbs', 'fox', 'cnn', 'hbo', 'showtime', 'starz', 'espn', 'discovery', 'national geographic', 'history', 'fx', 'tnt', 'tbs', 'usa network', 'paramount', 'peacock', 'hulu', 'netflix', 'amazon', 'apple tv'],
+        '🇬🇧 UK/Inglés': ['uk', 'british', 'bbc', 'itv', 'sky news', 'channel 4', 'channel 5', 'britbox'],
+        '🇫🇷 Francia': ['france', 'francais', 'francés', 'tf1', 'france 2', 'france 3', 'canal+', 'bfm', 'm6', 'arte'],
+        '🇩🇪 Alemania': ['alemania', 'aleman', 'deutsch', 'german', 'ard', 'zdf', 'rtl', 'prosieben', 'sat1', 'n-tv', 'welt'],
+        '🇮🇹 Italia': ['italia', 'italiano', 'rai', 'canale 5', 'italia 1', 'la7', 'sky italia', 'mediaset'],
+        '🇵🇹 Portugal': ['portugal', 'portugues', 'rtp', 'sic', 'tvi', 'sport tv'],
+        '🇧🇷 Brasil': ['brasil', 'brasileiro', 'globo', 'record', 'band', 'sbt', 'sportv'],
+        '🏆 Deportes': ['sport', 'deporte', 'futbol', 'football', 'soccer', 'espn', 'fox sports', 'bein', 'gol', 'la liga', 'premier league', 'champions', 'nba', 'nfl', 'mlb', 'ufc', 'wwe', 'motogp', 'f1'],
+        '🎬 Películas/Series': ['movie', 'pelicula', 'cine', 'film', 'series', 'hbo', 'netflix', 'disney', 'paramount', 'starz', 'showtime', 'tnt', 'fx'],
+        '📰 Noticias': ['news', 'noticia', 'informacion', 'cnn', 'bbc', 'sky news', 'fox news', 'msnbc', 'al jazeera', 'rt', 'euronews', 'bloomberg', 'reuters'],
+        '🎵 Música': ['music', 'musica', 'mtv', 'vh1', 'reggaeton', 'rock', 'pop', 'latino'],
+        '👶 Infantil': ['infantil', 'kids', 'children', 'disney', 'nickelodeon', 'cartoon', 'paw patrol', 'peppa', 'baby', 'cbeebies']
+    };
+    
+    function detectarPais(canal) {
+        const texto = (canal.nombre + ' ' + canal.grupo).toLowerCase();
+        for (const [pais, palabras] of Object.entries(patronesPais)) {
+            for (const palabra of palabras) {
+                if (texto.includes(palabra.toLowerCase())) return pais;
+            }
+        }
+        return '🌍 Otros';
+    }
+    
+    function log(mensaje, tipo = 'info') {
+        const colores = { exito: '#10b981', error: '#ef4444', info: '#888' };
+        const logDiv = document.getElementById('log');
+        logDiv.innerHTML += `<div style="color:${colores[tipo]}">[${new Date().toLocaleTimeString()}] ${mensaje}</div>`;
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+    
+    function parseM3U(contenido) {
+        const lineas = contenido.split(/\r?\n/);
+        const canales = [];
+        for (let i = 0; i < lineas.length; i++) {
+            let linea = lineas[i].trim();
+            if (linea.startsWith('#EXTINF:')) {
+                let nombre = 'Canal sin nombre';
+                let grupo = 'General';
+                const grupoMatch = linea.match(/group-title="([^"]*)"/);
+                if (grupoMatch) grupo = grupoMatch[1];
+                const ultimaComa = linea.lastIndexOf(',');
+                if (ultimaComa !== -1) nombre = linea.substring(ultimaComa + 1).trim();
+                if (!nombre) nombre = 'Canal';
+                i++;
+                if (i < lineas.length) {
+                    let url = lineas[i].trim();
+                    if (url.startsWith('http')) canales.push({ nombre, grupo, url });
+                }
+            }
+        }
+        return canales;
+    }
+    
+    async function probarCanal(url) {
+        return new Promise((resolve) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            fetch(url, { method: 'HEAD', mode: 'no-cors', signal: controller.signal })
+                .then(() => { clearTimeout(timeoutId); resolve(true); })
+                .catch(() => { clearTimeout(timeoutId); resolve(false); });
+        });
+    }
+    
+    async function limpiarAutomatico() {
+        if (todosCanales.length === 0) { alert('Carga un archivo M3U primero'); return; }
+        analizando = true;
+        detener = false;
+        document.getElementById('iniciarBtn').textContent = '⏹️ Cancelar';
+        document.getElementById('iniciarBtn').classList.add('rojo');
+        document.getElementById('modoNormalBtn').disabled = true;
+        document.getElementById('exportarBtn').disabled = true;
+        document.getElementById('progressContainer').style.display = 'block';
+        
+        const activos = [];
+        const total = todosCanales.length;
+        let procesados = 0;
+        
+        for (let i = 0; i < total; i++) {
+            if (detener) break;
+            const canal = todosCanales[i];
+            const funciona = await probarCanal(canal.url);
+            if (funciona) activos.push(canal);
+            procesados++;
+            const porcentaje = Math.round((procesados / total) * 100);
+            document.getElementById('progressFill').style.width = porcentaje + '%';
+            document.getElementById('progressFill').textContent = porcentaje + '%';
+            document.getElementById('activos').textContent = activos.length;
+            if (procesados % 20 === 0) log(`Progreso: ${porcentaje}% - Activos: ${activos.length}/${procesados}`, 'info');
+            await new Promise(r => setTimeout(r, 5));
+        }
+        
+        canalesActualesMostrados = activos;
+        localStorage.setItem('iptv_activos', JSON.stringify(activos));
+        document.getElementById('memoriaBadge').style.display = 'inline-block';
+        document.getElementById('modoBadge').style.display = 'none';
+        modoActual = 'limpio';
+        log(`✅ Limpieza completada: ${activos.length} activos de ${total}`, 'exito');
+        mostrarCanalesPorPais();
+        document.getElementById('exportarBtn').disabled = false;
+        analizando = false;
+        document.getElementById('iniciarBtn').textContent = '🚀 Iniciar limpieza automática';
+        document.getElementById('iniciarBtn').classList.remove('rojo');
+        document.getElementById('modoNormalBtn').disabled = false;
+        document.getElementById('progressContainer').style.display = 'none';
+    }
+    
+    // MODO NORMAL - Todos los canales sin limpieza
+    function cargarModoNormal() {
+        if (todosCanales.length === 0) { alert('Carga un archivo M3U primero'); return; }
+        
+        canalesActualesMostrados = [...todosCanales];
+        document.getElementById('activos').textContent = todosCanales.length;
+        document.getElementById('memoriaBadge').style.display = 'none';
+        document.getElementById('modoBadge').style.display = 'inline-block';
+        modoActual = 'normal';
+        log(`🎬 Modo normal activado - Mostrando todos los ${todosCanales.length} canales (sin verificación)`, 'exito');
+        mostrarCanalesPorPais();
+        document.getElementById('exportarBtn').disabled = false;
+        
+        // Limpiar progreso si estaba visible
+        document.getElementById('progressContainer').style.display = 'none';
+        document.getElementById('progressFill').style.width = '0%';
+    }
+    
+    // ============ PICTURE IN PICTURE ============
+    async function entrarPiP() {
+        const video = document.getElementById('video');
+        if (!video.src) {
+            log('No hay ningún video reproduciéndose', 'error');
+            return;
+        }
+        
+        try {
+            if (document.pictureInPictureElement) {
+                await document.exitPictureInPicture();
+                document.getElementById('pipBtn').textContent = '📺 PiP';
+                log('Picture-in-Picture desactivado', 'info');
+            } else if (video.requestPictureInPicture) {
+                await video.requestPictureInPicture();
+                document.getElementById('pipBtn').textContent = '⛔ Salir PiP';
+                log('Picture-in-Picture activado - Puedes seguir navegando por los canales', 'exito');
+            } else {
+                log('Tu navegador no soporta Picture-in-Picture', 'error');
+            }
+        } catch (error) {
+            log(`Error con PiP: ${error.message}`, 'error');
+        }
+    }
+    
+    function manejarPiP() {
+        const video = document.getElementById('video');
+        if (document.pictureInPictureElement) {
+            document.exitPictureInPicture();
+        } else if (video.requestPictureInPicture) {
+            video.requestPictureInPicture();
+        }
+    }
+    
+    // ============ REPRODUCCIÓN CON HLS.JS ============
+    function reproducirCanal(canal, index) {
+        if (!canal || !canal.url) return;
+        
+        if (hls) { hls.destroy(); hls = null; }
+        
+        const video = document.getElementById('video');
+        const url = canal.url;
+        const titulo = document.getElementById('tituloCanal');
+        titulo.textContent = canal.nombre;
+        
+        video.pause();
+        video.src = '';
+        
+        document.querySelectorAll('.canal').forEach(c => c.classList.remove('playing'));
+        const canalesDOM = document.querySelectorAll('.canal');
+        if (canalesDOM[index] && canalesDOM[index].classList) {
+            canalesDOM[index].classList.add('playing');
+        }
+        
+        const esHLS = url.includes('.m3u8') || url.includes('m3u8');
+        
+        if (esHLS && Hls.isSupported()) {
+            hls = new Hls({ enableWorker: true, lowLatencyMode: false, maxBufferLength: 30, maxMaxBufferLength: 60 });
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                video.play().catch(e => log(`Error al reproducir: ${canal.nombre} - ${e.message}`, 'error'));
+            });
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal && data.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
+            });
+            log(`▶️ Reproduciendo (HLS): ${canal.nombre}`, 'exito');
+        } else {
+            video.src = url;
+            video.play().catch(e => log(`Error al reproducir: ${canal.nombre} - ${e.message}`, 'error'));
+            log(`▶️ Reproduciendo: ${canal.nombre}`, 'exito');
+        }
+        
+        document.getElementById('reproductor').style.display = 'block';
+    }
+    
+    function canalSiguiente() {
+        if (canalesActualesMostrados.length === 0) return;
+        let nuevoIndex = indiceActual + 1;
+        if (nuevoIndex >= canalesActualesMostrados.length) nuevoIndex = 0;
+        indiceActual = nuevoIndex;
+        reproducirCanal(canalesActualesMostrados[indiceActual], buscarIndiceEnDOM(canalesActualesMostrados[indiceActual]));
+    }
+    
+    function canalAnterior() {
+        if (canalesActualesMostrados.length === 0) return;
+        let nuevoIndex = indiceActual - 1;
+        if (nuevoIndex < 0) nuevoIndex = canalesActualesMostrados.length - 1;
+        indiceActual = nuevoIndex;
+        reproducirCanal(canalesActualesMostrados[indiceActual], buscarIndiceEnDOM(canalesActualesMostrados[indiceActual]));
+    }
+    
+    function buscarIndiceEnDOM(canal) {
+        const canalesDOM = document.querySelectorAll('.canal');
+        for (let i = 0; i < canalesDOM.length; i++) {
+            if (canalesDOM[i].dataset.url === canal.url) return i;
+        }
+        return -1;
+    }
+    
+    function cerrarReproductor() {
+        if (hls) { hls.destroy(); hls = null; }
+        const video = document.getElementById('video');
+        video.pause();
+        video.src = '';
+        document.getElementById('reproductor').style.display = 'none';
+        indiceActual = -1;
+        
+        if (document.pictureInPictureElement) {
+            document.exitPictureInPicture();
+        }
+        document.getElementById('pipBtn').textContent = '📺 PiP';
+    }
+    
+    function mostrarCanalesPorPais() {
+        const grupos = {};
+        for (const canal of canalesActualesMostrados) {
+            const pais = detectarPais(canal);
+            if (!grupos[pais]) grupos[pais] = [];
+            grupos[pais].push(canal);
+        }
+        
+        const paisesOrdenados = Object.keys(grupos).sort();
+        document.getElementById('paises').textContent = paisesOrdenados.length;
+        document.getElementById('total').textContent = canalesActualesMostrados.length;
+        
+        const filtrosDiv = document.getElementById('filtrosContainer');
+        filtrosDiv.innerHTML = '<div class="filtro-btn activo" data-pais="todos">🌍 Todos</div>';
+        for (const pais of paisesOrdenados) {
+            filtrosDiv.innerHTML += `<div class="filtro-btn" data-pais="${pais}">${pais} (${grupos[pais].length})</div>`;
+        }
+        
+        document.querySelectorAll('.filtro-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('activo'));
+                btn.classList.add('activo');
+                paisActual = btn.dataset.pais;
+                renderizarCanales(grupos);
+            });
+        });
+        
+        renderizarCanales(grupos);
+    }
+    
+    function renderizarCanales(grupos) {
+        const container = document.getElementById('canalesPorPais');
+        container.innerHTML = '';
+        
+        const paisesFiltrar = paisActual === 'todos' ? Object.keys(grupos) : [paisActual];
+        let todosCanalesFiltrados = [];
+        
+        for (const pais of paisesFiltrar) {
+            if (!grupos[pais]) continue;
+            const canalesPais = grupos[pais];
+            todosCanalesFiltrados = [...todosCanalesFiltrados, ...canalesPais];
+            
+            container.innerHTML += `
+                <div class="pais-seccion">
+                    <div class="pais-titulo" onclick="togglePais(this)">
+                        <h3>${pais}</h3>
+                        <span class="count">${canalesPais.length} canales</span>
+                    </div>
+                    <div class="grid" style="display: grid;">${generarHtmlCanales(canalesPais)}</div>
+                </div>
+            `;
+        }
+        
+        canalesActualesMostrados = todosCanalesFiltrados;
+        
+        document.querySelectorAll('.canal').forEach((c, idx) => {
+            c.addEventListener('click', () => {
+                const canalEncontrado = canalesActualesMostrados.find(canal => canal.url === c.dataset.url);
+                if (canalEncontrado) {
+                    indiceActual = canalesActualesMostrados.indexOf(canalEncontrado);
+                    reproducirCanal(canalEncontrado, idx);
+                }
+            });
+        });
+    }
+    
+    function generarHtmlCanales(canales) {
+        return canales.map(c => `
+            <div class="canal" data-url="${escapeHtml(c.url)}" data-nombre="${escapeHtml(c.nombre)}">
+                <div class="canal-icono">📺</div>
+                <div class="canal-info">
+                    <div class="canal-nombre">${escapeHtml(c.nombre)}</div>
+                    <div class="canal-grupo">${escapeHtml(c.grupo)}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    function escapeHtml(str) { return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
+    function togglePais(el) { const grid = el.nextElementSibling; grid.style.display = grid.style.display === 'none' ? 'grid' : 'none'; }
+    
+    function exportarM3U() {
+        if (canalesActualesMostrados.length === 0) { alert('No hay canales para exportar'); return; }
+        let m3u = '#EXTM3U\n';
+        for (const c of canalesActualesMostrados) { m3u += `#EXTINF:-1 group-title="${c.grupo}",${c.nombre}\n${c.url}\n`; }
+        const blob = new Blob([m3u], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `iptv_${modoActual === 'limpio' ? 'limpio_' : 'normal_'}_${canalesActualesMostrados.length}_canales.m3u`;
+        a.click();
+        URL.revokeObjectURL(blob);
+        log(`💾 Exportados ${canalesActualesMostrados.length} canales (Modo: ${modoActual === 'limpio' ? 'Limpio' : 'Normal'})`, 'exito');
+    }
+    
+    // ============ ARRASTRE DEL REPRODUCTOR ============
+    let isDragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    function iniciarArrastre(e) {
+        const reproductor = document.getElementById('reproductor');
+        if (reproductor.style.display === 'none') return;
+        
+        const rect = reproductor.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        dragOffsetX = clientX - rect.left;
+        dragOffsetY = clientY - rect.top;
+        
+        isDragging = true;
+        reproductor.style.cursor = 'grabbing';
+        reproductor.style.transition = 'none';
+        reproductor.style.userSelect = 'none';
+        
+        document.addEventListener('mousemove', moverArrastre);
+        document.addEventListener('mouseup', detenerArrastre);
+        document.addEventListener('touchmove', moverArrastre, { passive: false });
+        document.addEventListener('touchend', detenerArrastre);
+        document.addEventListener('touchcancel', detenerArrastre);
+    }
+
+    function moverArrastre(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        
+        const reproductor = document.getElementById('reproductor');
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        let newLeft = clientX - dragOffsetX;
+        let newTop = clientY - dragOffsetY;
+        
+        // Limitar para que no se salga de la pantalla
+        const rect = reproductor.getBoundingClientRect();
+        const winWidth = window.innerWidth;
+        const winHeight = window.innerHeight;
+        
+        newLeft = Math.max(0, Math.min(newLeft, winWidth - rect.width));
+        newTop = Math.max(0, Math.min(newTop, winHeight - rect.height));
+        
+        reproductor.style.left = newLeft + 'px';
+        reproductor.style.top = newTop + 'px';
+        reproductor.style.right = 'auto';
+        reproductor.style.bottom = 'auto';
+    }
+
+    function detenerArrastre() {
+        if (isDragging) {
+            isDragging = false;
+            const reproductor = document.getElementById('reproductor');
+            reproductor.style.cursor = 'default';
+            reproductor.style.userSelect = '';
+            document.removeEventListener('mousemove', moverArrastre);
+            document.removeEventListener('mouseup', detenerArrastre);
+            document.removeEventListener('touchmove', moverArrastre);
+            document.removeEventListener('touchend', detenerArrastre);
+            document.removeEventListener('touchcancel', detenerArrastre);
+        }
+    }
+
+    // ============ EVENTOS ============
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const texto = await file.text();
+        todosCanales = parseM3U(texto);
+        document.getElementById('total').textContent = todosCanales.length;
+        document.getElementById('resultadosPanel').style.display = 'block';
+        document.getElementById('iniciarBtn').disabled = false;
+        document.getElementById('modoNormalBtn').disabled = false;
+        log(`📁 Cargados ${todosCanales.length} canales`, 'exito');
+        
+        const memorizados = localStorage.getItem('iptv_activos');
+        if (memorizados) {
+            try {
+                const canalesMemorizados = JSON.parse(memorizados);
+                if (canalesMemorizados.length > 0) {
+                    canalesActualesMostrados = canalesMemorizados;
+                    document.getElementById('memoriaBadge').style.display = 'inline-block';
+                    document.getElementById('activos').textContent = canalesMemorizados.length;
+                    document.getElementById('modoBadge').style.display = 'none';
+                    modoActual = 'limpio';
+                    mostrarCanalesPorPais();
+                    document.getElementById('exportarBtn').disabled = false;
+                    log(`💾 Cargados ${canalesMemorizados.length} canales de la memoria (limpieza previa)`, 'exito');
+                }
+            } catch(e) {}
+        }
+    });
+    
+    document.getElementById('iniciarBtn').addEventListener('click', async () => {
+        if (analizando) { detener = true; analizando = false; log('⏹️ Limpieza cancelada', 'error'); return; }
+        await limpiarAutomatico();
+    });
+    
+    document.getElementById('modoNormalBtn').addEventListener('click', () => {
+        if (analizando) {
+            log('Espera a que termine la limpieza actual', 'error');
+            return;
+        }
+        cargarModoNormal();
+    });
+    
+    document.getElementById('exportarBtn').addEventListener('click', exportarM3U);
+    document.getElementById('borrarMemoriaBtn').addEventListener('click', () => {
+        localStorage.removeItem('iptv_activos');
+        if (modoActual === 'limpio') {
+            canalesActualesMostrados = [];
+            document.getElementById('activos').textContent = '0';
+            document.getElementById('exportarBtn').disabled = true;
+            document.getElementById('canalesPorPais').innerHTML = '<div style="text-align:center; padding:40px;">🗑️ Memoria borrada. Inicia una nueva limpieza o usa "Modo Normal".</div>';
+        }
+        document.getElementById('memoriaBadge').style.display = 'none';
+        log('🗑️ Memoria borrada', 'info');
+        cerrarReproductor();
+    });
+    
+    document.getElementById('areaArrastre').addEventListener('click', () => document.getElementById('fileInput').click());
+    document.getElementById('cerrarReproductorBtn').addEventListener('click', cerrarReproductor);
+    document.getElementById('anteriorBtn').addEventListener('click', canalAnterior);
+    document.getElementById('siguienteBtn').addEventListener('click', canalSiguiente);
+    document.getElementById('pipBtn').addEventListener('click', manejarPiP);
+    
+    // Eventos para PiP
+    const videoElement = document.getElementById('video');
+    videoElement.addEventListener('enterpictureinpicture', () => {
+        document.getElementById('pipBtn').textContent = '⛔ Salir PiP';
+        log('📺 Modo Picture-in-Picture activado', 'exito');
+    });
+    videoElement.addEventListener('leavepictureinpicture', () => {
+        document.getElementById('pipBtn').textContent = '📺 PiP';
+        log('🖥️ Modo Picture-in-Picture desactivado', 'info');
+    });
+    
+    document.addEventListener('keydown', (e) => {
+        if (document.getElementById('reproductor').style.display === 'block') {
+            if (e.key === 'ArrowLeft') { e.preventDefault(); canalAnterior(); }
+            else if (e.key === 'ArrowRight') { e.preventDefault(); canalSiguiente(); }
+            else if (e.key === 'Escape') { cerrarReproductor(); }
+            else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); manejarPiP(); }
+        }
+    });
+    
+    const area = document.getElementById('areaArrastre');
+    area.addEventListener('dragover', (e) => { e.preventDefault(); area.style.borderColor = '#764ba2'; });
+    area.addEventListener('dragleave', () => area.style.borderColor = '#667eea');
+    area.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        area.style.borderColor = '#667eea';
+        const file = e.dataTransfer.files[0];
+        if (file && (file.name.endsWith('.m3u') || file.name.endsWith('.m3u8') || file.name.endsWith('.txt'))) {
+            const texto = await file.text();
+            todosCanales = parseM3U(texto);
+            document.getElementById('total').textContent = todosCanales.length;
+            document.getElementById('resultadosPanel').style.display = 'block';
+            document.getElementById('iniciarBtn').disabled = false;
+            document.getElementById('modoNormalBtn').disabled = false;
+            log(`📁 Cargados ${todosCanales.length} canales`, 'exito');
+        } else { alert('Por favor, carga un archivo .m3u'); }
+    });
+
+    // ============ EVENTOS DE ARRASTRE DEL REPRODUCTOR ============
+    const header = document.getElementById('reproductorHeader');
+    header.addEventListener('mousedown', iniciarArrastre);
+    header.addEventListener('touchstart', iniciarArrastre, { passive: false });
+    header.addEventListener('dragstart', (e) => e.preventDefault());
+    
+    log('✅ Listo. Carga tu archivo M3U', 'exito');
+    log('🎬 Puedes usar "Limpieza automática" (prueba canales) o "Modo Normal" (reproduce todo sin verificar)', 'info');
+    log('🖼️ Picture-in-Picture: Botón PiP o tecla "P"', 'info');
+    log('🖱️ Arrastra el reproductor desde la barra superior (cabecera)', 'info');
+</script>
+</body>
+</html>
